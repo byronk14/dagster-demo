@@ -1,0 +1,6 @@
+[project]
+name = "dagster-demo"
+version = "2024.0.1"
+dependencies = [
+    
+]
