@@ -1,14 +1,16 @@
 import requests
 from dagster_duckdb import DuckDBResource
 from . import constants
-from dagster import asset
+from dagster import asset, MetadataValue, MaterializeResult
 import os
 from ..partitions import monthly_partition
+import pandas as pd
 
 
 
 @asset(
-    partitions_def=monthly_partition
+    partitions_def=monthly_partition,
+    group_name="raw_files"
 )
 def taxi_trips_file(context):
     """
@@ -24,7 +26,19 @@ def taxi_trips_file(context):
     with open(constants.TAXI_TRIPS_TEMPLATE_FILE_PATH.format(month_to_fetch), "wb") as output_file:
         output_file.write(raw_trips.content)
 
-@asset
+    num_rows = len(pd.read_parquet(constants.TAXI_TRIPS_TEMPLATE_FILE_PATH.format(month_to_fetch)))
+
+    return MaterializeResult(
+    metadata={
+        'Number of records': MetadataValue.int(num_rows)
+        }
+    )
+
+
+
+@asset(
+        group_name="ingested"
+)
 def taxi_zones_file():
     """
         Unique identifier and name for each part of NYC as a distinct taxi zone.
@@ -37,7 +51,8 @@ def taxi_zones_file():
 
 @asset(
     deps=["taxi_trips_file"],
-    partitions_def=monthly_partition
+    partitions_def=monthly_partition,
+    group_name="ingested"
 )
 def taxi_trips(context, database: DuckDBResource):
     """

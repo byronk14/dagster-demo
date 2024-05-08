@@ -1,8 +1,9 @@
-from dagster import Config, asset
+from dagster import Config, asset, MaterializeResult, MetadataValue, get_dagster_logger
 from dagster_duckdb import DuckDBResource
 
 import plotly.express as px
 import plotly.io as pio
+import base64
 
 from . import constants
 
@@ -12,10 +13,8 @@ class AdhocRequestConfig(Config):
     start_date: str
     end_date: str
 
-@asset(
-    deps=["taxi_zones", "taxi_trips"]
-)
-def adhoc_request(config: AdhocRequestConfig, database: DuckDBResource):
+@asset
+def adhoc_request(config: AdhocRequestConfig, taxi_zones, taxi_trips, database: DuckDBResource):
     """
       The response to an request made in the `requests` directory.
       See `requests/README.md` for more information.
@@ -40,12 +39,12 @@ def adhoc_request(config: AdhocRequestConfig, database: DuckDBResource):
           end as day_of_week,
           count(*) as num_trips
         from trips
-        left join taxi_zones zones on trips.pickup_zone_id = zones.zone_id
+        left join zones on trips.pickup_zone_id = zones.zone_id
         where pickup_datetime >= '{config.start_date}'
         and pickup_datetime < '{config.end_date}'
         and pickup_zone_id in (
           select zone_id
-          from taxi_zones
+          from zones
           where borough = '{config.borough}'
         )
         group by 1, 2
@@ -63,10 +62,22 @@ def adhoc_request(config: AdhocRequestConfig, database: DuckDBResource):
         barmode="stack",
         title=f"Number of trips by hour of day in {config.borough}, from {config.start_date} to {config.end_date}",
         labels={
-            "hour_of_day": "Hour of Day",
-            "day_of_week": "Day of Week",
-            "num_trips": "Number of Trips"
+          "hour_of_day": "Hour of Day",
+          "day_of_week": "Day of Week",
+          "num_trips": "Number of Trips"
         }
     )
 
     pio.write_image(fig, file_path)
+
+    with open(file_path, 'rb') as file:
+        image_data = file.read()
+
+    base64_data = base64.b64encode(image_data).decode('utf-8')
+    md_content = f"![Image](data:image/jpeg;base64,{base64_data})"
+
+    return MaterializeResult(
+        metadata={
+            "preview": MetadataValue.md(md_content)
+        }
+    )

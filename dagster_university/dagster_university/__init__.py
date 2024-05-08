@@ -15,7 +15,10 @@ all_jobs = [trip_update_job, weekly_update_job, adhoc_request_job]
 all_schedules = [trip_update_schedule, weekly_update_schedule]
 all_sensors = [adhoc_request_sensor]
 
-
+request_assets = load_assets_from_modules(
+    modules=[requests],
+    group_name="requests",
+)
 
 
 defs = Definitions(
